@@ -9,7 +9,11 @@ structured markdown report with citations.
 Run with:  python -m research_crew.crew "your topic here"
 """
 
+import os
+import re
 import sys
+from datetime import datetime
+
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai_tools import SerperDevTool
@@ -19,7 +23,7 @@ search_tool = SerperDevTool()     # Initialize the Serper.dev search tool
 
 # --- Model -------------------------------------------------------------
 # Using Sonnet 5 here; swap the model string if you prefer another.
-llm = LLM(model="anthropic/claude-sonnet-5", max_tokens=16000) #Sized for large, cited reports; increase max_tokens if report truncates.
+llm = LLM(model="anthropic/claude-sonnet-5", max_tokens=16000)  # Sized for large, cited reports; increase max_tokens if report truncates.
 
 
 # --- Agents ------------------------------------------------------------
@@ -37,7 +41,7 @@ planner = Agent(
 
 web_researcher = Agent(
     role="Web Researcher",
-    goal="Find current, sourced, and relevant information to answer the research " \
+    goal="Find current, sourced, and relevant information to answer the research "
          "questions, prioritizing authoritative sources over unverified ones.",
     backstory=(
         "You are a skilled web researcher who verifies claims against real, "
@@ -47,11 +51,20 @@ web_researcher = Agent(
         "Federal Reserve banks, universities), and reputable journalism. You "
         "avoid relying on forums, social media posts, or unverified blogs "
         "except as a last resort when no stronger source exists, and you note "
-        "when a finding rests on a weaker source."
+        "when a finding rests on a weaker source. You work efficiently: once "
+        "you have 2-3 solid, well-sourced findings for a given research "
+        "question, you move on rather than continuing to search for "
+        "additional corroboration or chasing down a single source's exact "
+        "wording."
     ),
     llm=llm,
     tools=[search_tool],
     verbose=True,
+    max_iter=25,  # Hard cap on tool-call iterations. Without this, the agent
+                  # has no enforced stopping point and will keep searching to
+                  # verify granular details even after gathering enough
+                  # material — observed burning 100+ Serper calls on a single
+                  # research task before this was added.
 )
 
 writer = Agent(
@@ -90,7 +103,7 @@ def build_tasks(topic: str):
             "that explicitly rather than presenting it with the same "
             "confidence as a stronger source."
         ),
-        expected_output="Answers to the research questions with source URLs " \
+        expected_output="Answers to the research questions with source URLs "
                         "attached, noting source quality where relevant.",
         agent=web_researcher,
         context=[plan_task],
@@ -104,13 +117,58 @@ def build_tasks(topic: str):
             "do not add information that wasn't found in the research. Cite the source "
             "URL for each claim."
         ),
-        expected_output="A markdown report with an intro and one section per question, " \
+        expected_output="A markdown report with an intro and one section per question, "
         "with source URLs cited for every substantive claim.",
         agent=writer,
         context=[plan_task, research_task],
     )
 
-    return [plan_task, research_task,write_task]
+    return [plan_task, research_task, write_task]
+
+
+# --- Output helpers ------------------------------------------------------
+def slugify(topic: str, max_len: int = 50) -> str:
+    """
+    Convert a topic string into a filesystem-safe slug.
+
+    Lowercases, replaces anything that isn't a letter/number with a hyphen,
+    collapses repeated hyphens, and trims to max_len so long topics don't
+    produce unwieldy filenames. Never trust user input in a filename, even
+    in a CLI tool only you run.
+    """
+    slug = topic.lower()
+    slug = re.sub(r"[^a-z0-9]+", "-", slug)
+    slug = slug.strip("-")
+    return slug[:max_len].rstrip("-")
+
+
+def build_output_path(topic: str, outputs_dir: str = "outputs") -> str:
+    """
+    Build a sortable, collision-resistant output path:
+    outputs/report_{topic-slug}_{timestamp}.md
+
+    Timestamp format is sortable by filename (YYYY-MM-DD_HHMM) so a directory
+    listing sorts chronologically without opening each file.
+    """
+    os.makedirs(outputs_dir, exist_ok=True)
+    slug = slugify(topic)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M")
+    filename = f"report_{slug}_{timestamp}.md"
+    return os.path.join(outputs_dir, filename)
+
+
+def build_metadata_header(topic: str, model_name: str) -> str:
+    """
+    Small metadata block written above the report body so a sample file in
+    /examples is self-documenting without the README open in another tab.
+    """
+    generated_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+    return (
+        f"**Topic:** {topic}\n\n"
+        f"**Generated:** {generated_at}\n\n"
+        f"**Model:** {model_name}\n\n"
+        "---\n\n"
+    )
 
 
 # --- Crew --------------------------------------------------------------
@@ -131,6 +189,16 @@ def run(topic: str) -> str:
             "\n WARNING: Output may be truncated — it doesn't end with "
             "normal sentence punctuation. Check max_tokens on the LLM object.\n"
         )
+
+    # Persist to disk. Metadata header + report body, kept separate by a
+    # horizontal rule so the report itself stays clean if someone copies
+    # just that part.
+    output_path = build_output_path(topic)
+    header = build_metadata_header(topic, llm.model)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(header)
+        f.write(output)
+    print(f"\nSaved report to: {output_path}\n")
 
     return output
 
