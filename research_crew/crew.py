@@ -9,12 +9,14 @@ Run with:  python -m research_crew.crew "your topic here"
 """
 
 import sys
+from dotenv import load_dotenv
 from crewai import Agent, Task, Crew, Process, LLM
 
+load_dotenv()  # Load ANTHROPIC_API_KEY from .env file if present
+
 # --- Model -------------------------------------------------------------
-# CrewAI reads ANTHROPIC_API_KEY from your environment automatically.
-# Using Claude here; swap the model string if you prefer another provider.
-llm = LLM(model="anthropic/claude-sonnet-4-6")
+# Using Sonnet 5 here; swap the model string if you prefer another.
+llm = LLM(model="anthropic/claude-sonnet-5")
 
 
 # --- Agents ------------------------------------------------------------
