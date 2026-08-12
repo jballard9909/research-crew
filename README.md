@@ -5,7 +5,7 @@ A three-agent CrewAI pipeline that turns a topic into a sourced markdown researc
 Give it a topic. A **Planner** agent generates focused research questions, a
 **Web Researcher** agent searches the web via Serper.dev and gathers answers with source
 URLs, and a **Writer** agent synthesizes those findings into a structured markdown report
-with inline citations. Reports are written to a timestamped file in.
+with inline citations. Reports are written to a timestamped file.
 
 ```bash
 python -m research_crew.crew "the economic impact of remote work"
@@ -59,8 +59,8 @@ model, so a sample file is self-describing without the README open alongside it.
 ### Source quality
 
 Both the Web Researcher's goal and its task instruction direct it to prioritize primary and
-authoritative sources — government data, peer-reviewed research, established research
-institutions — and to note explicitly when a finding rests on a weaker source.
+authoritative sources (government data, peer-reviewed research, established research
+institutions) and to note explicitly when a finding rests on a weaker source.
 
 Across all four topics, the agent flagged weaker sources inline rather than presenting them
 at the same confidence as stronger ones. From the remote work report:
@@ -120,8 +120,8 @@ no branching, retry-on-poor-results, or conditional depth.
 
 ## Quick start
 
-**Requirements:** Python 3.13.14, an [Anthropic API key](https://console.anthropic.com/), and a
-[Serper.dev API key](https://serper.dev/).
+**Requirements:** Python 3.13.x (developed on Python 3.13.14), an [Anthropic API key](https://console.anthropic.com/), 
+and a [Serper.dev API key](https://serper.dev/).
 
 ```bash
 git clone https://github.com/jballard9909/research-crew.git
@@ -134,7 +134,7 @@ python -m research_crew.crew "your topic here"
 ```
 
 The report prints to the terminal and is saved as
-`outputs/report_{topic-slug}_{timestamp}.md`. For my project, `outputs/` is gitignored. The
+`outputs/report_{topic-slug}_{timestamp}.md`. `outputs/` is gitignored. The
 reports in `examples/` are a limited selection of all reports generated.
 
 Note: Each run makes live calls to both APIs and consumes credits on both.
